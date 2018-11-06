@@ -27,9 +27,14 @@ var currentLocation = {
  * Switch channels name in the right app bar
  * @param channelObject
  */
-function switchChannel(channelObject) {
+function switchChannel(channelObject, channelElement) {
     // Log the channel switch
     console.log("Tuning in to channel", channelObject);
+
+    // #11 clears the current selected channel
+    $('#channels li').removeClass('selected');
+    /* #11 add class select to channelElement of new selected channel   */
+    $(channelElement).addClass("selected");
 
     // #10 #new: switching channels aborts "create new channel"-mode
     abortCreationMode();
@@ -51,11 +56,17 @@ function switchChannel(channelObject) {
 
     /* highlight the selected #channel.
        This is inefficient (jQuery has to search all channel list items), but we'll change it later on */
-    $('#channels li').removeClass('selected');
-    $('#channels li:contains(' + channelObject.name + ')').addClass('selected');
+    /* $('#channels li').removeClass('selected');
+     $('#channels li:contains(' + channelObject.name + ')').addClass('selected'); */
 
     /* store selected channel in global variable */
     currentChannel = channelObject;
+
+    /* call function to show messages */
+    $('#messages').empty();  // clears msgs from previous channel
+    $.each(currentChannel.messages, function (index, val){
+        showMessage(val);
+    });
 }
 
 /* liking a channel on #click */
@@ -63,7 +74,7 @@ function star() {
     // Toggling star
     // #9 selector adjusted for #btns #str
     $('#channel-star i').toggleClass('far');
-    $('#channel-star i').toggleClass('fas');
+    $('#channel-star i').toggleClass('fas'); 
 
     // toggle star also in data model
     currentChannel.starred = !currentChannel.starred;
@@ -100,7 +111,7 @@ function toggleEmojis() {
     $('#emojis').toggle(); // #toggle
 }
 
-/* #10 #add ing #emojis with this function and calling it in the body's onload event listener is more #suitable */
+/* #10 #adding #emojis with this function and calling it in the body's onload event listener is more #suitable */
 function loadEmojis() {
     var emojis = require('emojis-list');
     $('#emojis').empty();
@@ -126,6 +137,22 @@ function Message(text) {
     this.text = text;
     // own message
     this.own = true;
+    this.messageElement = ""; // Id of div element 
+    // #11 add method to calculate and update remaining min of messages
+    this.update = function(val) {
+        //var expiresOn = $(this.messageElement).find("em").val();
+        var expiresIn = Math.round((val.expiresOn - Date.now()) / 1000 / 60);
+        //console.log(index, val.messageElement); // <- check value of messageElement
+        // #11 condition if message expires
+      
+        //#11 change color of mins left if less than 5 min
+        if (expiresIn < 5){
+            $(val.messageElement).find("em").html(expiresIn+' mins left').css("color", "#192B8F"); 
+        }
+        else {
+            $(val.messageElement).find("em").html(expiresIn+' mins left');
+        }
+    } 
 }
 
 function sendMessage() {
@@ -141,22 +168,45 @@ function sendMessage() {
 
     // Creating and logging a message with content from the input field
     var message = new Message(text);
-    console.log("New message:", message);
+    // console.log("New message:", message);
 
     // #10 #push the new #message to the current channel's messages array
     currentChannel.messages.push(message);
 
-    // #10 #increase the messageCount of the current channel
-    currentChannel.messageCount+=1;
-
+    
     // Adding the message to the messages-div
     $('#messages').append(createMessageElement(message));
+
+    // #10 #increase the messageCount of the current channel
+    currentChannel.messageCount+=1;
 
     // messages will scroll to a certain point if we apply a certain height, in this case the overall scrollHeight of the messages-div that increases with every message;
     $('#messages').scrollTop($('#messages').prop('scrollHeight'));
 
     // clear the #message input
     $('#message').val('');
+}
+
+/*  #11 add character counter   */
+function charcountupdate(str) {
+	var lng = str.length;
+	document.getElementById("charcount").innerHTML = lng + ' / 140';
+}
+
+
+/* #11 add function to show messages of current channel   */
+function showMessage(text){
+
+    /// Creating and logging a message with content from the message[]
+    var message = new Message(text);
+    //console.log("First message:", text);
+
+    // Adding the message to the messages-div
+    $('#messages').append(createMessageElement(message));
+    
+    // messages will scroll to a certain point if we apply a certain height, in this case the overall scrollHeight of the messages-div that increases with every message;
+    $('#messages').scrollTop($('#messages').prop('scrollHeight'));
+
 }
 
 /**
@@ -166,22 +216,40 @@ function sendMessage() {
  */
 function createMessageElement(messageObject) {
     // Calculating the expiresIn-time from the expiresOn-property
-    var expiresIn = Math.round((messageObject.expiresOn - Date.now()) / 1000 / 60);
+    var expiresIn = Math.round((messageObject.expiresOn - Date.now()) / 1000 / 60)*10/10;
 
-    // Creating a message-element
-    return '<div class="message'+
+     // *11 save div element to messageObject
+     messageObject.messageElement = '#' + currentChannel.messageCount;
+
+   var messagePackage= '<div class="message'+ 
         //this dynamically adds #own to the #message, based on the
         //ternary operator. We need () in order not to disrupt the return.
         (messageObject.own ? ' own' : '') +
-        '">' +
+        '" id ="' + currentChannel.messageCount + '">' +  // #11 added ID to reference Div element
         '<h3><a href="http://w3w.co/' + messageObject.createdBy + '" target="_blank">'+
         '<strong>' + messageObject.createdBy + '</strong></a>' +
         messageObject.createdOn.toLocaleString() +
         '<em>' + expiresIn + ' min. left</em></h3>' +
         '<p>' + messageObject.text + '</p>' +
-        '<button class="accent">+5 min.</button>' +
-        '</div>';
-}
+        '<button class="accent" onclick="extendFive(' + "'" + messageObject.messageElement + "'"+')">+5 min.</button>' + //#11 add listener for +5 button
+        '</div>'; 
+    
+    return messagePackage;
+
+} 
+
+
+
+/* #11 add function to extend 5 min upon ""+5" button clicked   */
+function extendFive(id) {
+    var messageid= id.substring(1);
+    var current=currentChannel.messages[messageid].expiresOn.getTime();
+    current += 300000;
+    currentChannel.messages[messageid].expiresOn = new Date(current);
+    currentChannel.messages[messageid].update(currentChannel.messages[messageid]);
+} 
+
+
 
 /* #10 Three #compare functions to #sort channels */
 /**
@@ -225,6 +293,10 @@ function listChannels(criterion) {
     for (i = 0; i < channels.length; i++) {
         $('#channels ul').append(createChannelElement(channels[i]));
     };
+
+    /* #11 add selected class to selected channel   */
+    $('li:contains('+currentChannel.name+')' ).addClass("selected");
+
 }
 
 /**
@@ -275,7 +347,7 @@ function createChannel() {
         // Create DOM element of new channel object and append it to channels list.
         $('#channels ul').append(createChannelElement(channel));
         // Log channel creation.
-        console.log('New channel: ' + channel);
+        console.log('New channel: ', channel);
         // Send initial message.
         sendMessage();
         // Empty channel name input field.
@@ -309,7 +381,7 @@ function createChannelElement(channelObject) {
      */
 
     // create a channel
-    var channel = $('<li>').text(channelObject.name);
+    var channel = $('<li>').text(channelObject.name).attr('onClick','switchChannel('+ JSON.stringify(channelObject)+ ', this);');
 
     // create and append channel meta
     var meta = $('<span>').addClass('channel-meta').appendTo(channel);
@@ -354,4 +426,20 @@ function abortCreationMode() {
     $('#app-bar-create').removeClass('show');
     $('#button-create').hide();
     $('#button-send').show();
+}
+
+/* #11 initialize app   & move listChnannels() and loadEmojis() here*/
+$( "document" ).ready(function(){
+    listChannels(compareNew); 
+    loadEmojis();
+    console.log("App is initialized");
+    window.setInterval(myTimer, 10000);  // #11 add interval which updates the remaining time in messages
+});
+
+function myTimer(){
+    console.log("Updating message elements");
+    $.each(currentChannel.messages, function (index, val){
+        //console.log(index, val.messageElement); <- check
+        val.update(val);  // #11 call update function for remaining min in messages
+    });
 }
